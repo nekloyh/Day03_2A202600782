@@ -75,11 +75,11 @@ def test_mimo_provider_uses_token_plan_defaults(monkeypatch):
         {"role": "system", "content": "Be direct."},
         {"role": "user", "content": "Hello"},
     ]
-    assert request["max_completion_tokens"] == 32768
-    assert request["temperature"] == 1.0
+    assert request["max_completion_tokens"] == 4096
+    assert request["temperature"] == 0.3
     assert request["top_p"] == 0.95
     assert request["stream"] is False
-    assert request["extra_body"] == {"thinking": {"type": "enabled"}}
+    assert request["extra_body"] == {"thinking": {"type": "disabled"}}
     assert result["content"] == "hello from mimo"
     assert result["provider"] == "mimo"
     assert result["usage"]["reasoning_tokens"] == 3

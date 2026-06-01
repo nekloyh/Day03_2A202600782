@@ -15,7 +15,7 @@ class MimoProvider(LLMProvider):
 
     DEFAULT_BASE_URL = "https://token-plan-sgp.xiaomimimo.com/v1"
     DEFAULT_MODEL = "mimo-v2.5-pro"
-    DEFAULT_MAX_COMPLETION_TOKENS = 32768
+    DEFAULT_MAX_COMPLETION_TOKENS = 4096
 
     def __init__(
         self,
@@ -27,21 +27,43 @@ class MimoProvider(LLMProvider):
         temperature: Optional[float] = None,
         top_p: Optional[float] = None,
     ):
+        explicit_api_key = api_key is not None
+        use_env_config = not explicit_api_key
+
         api_key = api_key or os.getenv("MIMO_API_KEY")
         if not api_key:
             raise ValueError("MIMO_API_KEY is required for MimoProvider.")
 
         super().__init__(model_name, api_key)
 
-        self.base_url = (base_url or os.getenv("MIMO_BASE_URL") or self.DEFAULT_BASE_URL).rstrip("/")
-        self.thinking_type = thinking_type or os.getenv("MIMO_THINKING", "enabled")
+        self.base_url = (
+            base_url
+            or (os.getenv("MIMO_BASE_URL") if use_env_config else None)
+            or self.DEFAULT_BASE_URL
+        ).rstrip("/")
+        self.thinking_type = (
+            thinking_type
+            or (os.getenv("MIMO_THINKING") if use_env_config else None)
+            or "disabled"
+        )
         self.max_completion_tokens = self._resolve_int(
             max_completion_tokens,
             "MIMO_MAX_COMPLETION_TOKENS",
             self.DEFAULT_MAX_COMPLETION_TOKENS,
+            use_env=use_env_config,
         )
-        self.temperature = self._resolve_float(temperature, "MIMO_TEMPERATURE", 1.0)
-        self.top_p = self._resolve_float(top_p, "MIMO_TOP_P", 0.95)
+        self.temperature = self._resolve_float(
+            temperature,
+            "MIMO_TEMPERATURE",
+            0.3,
+            use_env=use_env_config,
+        )
+        self.top_p = self._resolve_float(
+            top_p,
+            "MIMO_TOP_P",
+            0.95,
+            use_env=use_env_config,
+        )
 
         self.client = OpenAI(api_key=self.api_key, base_url=self.base_url)
 
@@ -124,13 +146,27 @@ class MimoProvider(LLMProvider):
         return usage_dict
 
     @staticmethod
-    def _resolve_int(value: Optional[int], env_name: str, default: int) -> int:
+    def _resolve_int(
+        value: Optional[int],
+        env_name: str,
+        default: int,
+        use_env: bool = True,
+    ) -> int:
         if value is not None:
             return value
+        if not use_env:
+            return default
         return int(os.getenv(env_name, str(default)))
 
     @staticmethod
-    def _resolve_float(value: Optional[float], env_name: str, default: float) -> float:
+    def _resolve_float(
+        value: Optional[float],
+        env_name: str,
+        default: float,
+        use_env: bool = True,
+    ) -> float:
         if value is not None:
             return value
+        if not use_env:
+            return default
         return float(os.getenv(env_name, str(default)))

@@ -18,6 +18,57 @@ pip install -r requirements.txt
 ### 3. Directory Structure
 - `src/tools/`: Extension point for your custom tools.
 
+## MVP Research Gap Analyzer Lite
+
+This repo now includes a Lab 3 MVP ReAct agent demo. The default success trace uses MiMo via `DEFAULT_PROVIDER=mimo`; a deterministic scripted/offline mode remains available without API keys. The demo writes three required artifacts:
+
+- `outputs/research_gap_analyzer_lite/gap_analysis_report.md`
+- `outputs/research_gap_analyzer_lite/comparison_matrix.md`
+- `outputs/research_gap_analyzer_lite/evidence_cards.json`
+
+Run the live MiMo demo with the current `.env`:
+
+```bash
+python scripts/run_research_gap_demo.py
+```
+
+Equivalent explicit MiMo command:
+
+```bash
+python scripts/run_research_gap_demo.py --provider mimo
+```
+
+Run the deterministic offline demo without API keys:
+
+```bash
+python scripts/run_research_gap_demo.py --provider scripted --offline
+```
+
+Run the test suite:
+
+```bash
+pytest
+```
+
+The demo produces one successful ReAct trace with the selected provider and one deterministic scripted failure-handling trace. If MiMo is selected and `MIMO_API_KEY` is missing, the CLI fails with an actionable message and suggests `--provider scripted --offline`.
+
+Check `logs/YYYY-MM-DD.log` for structured events such as `AGENT_START`, `AGENT_STEP`, `TOOL_CALL`, `TOOL_RESULT`, `PARSER_ERROR`, `AGENT_ERROR`, `SEARCH_FALLBACK`, `MIXED_RESPONSE_IGNORED_FINAL`, `FINAL_ANSWER`, and `MAX_STEPS_EXCEEDED`.
+
+Research tools:
+
+- `search_papers({"query": "...", "limit": 5, "year_range": [2021, 2025]})`: uses Semantic Scholar when online and falls back to the mock dataset. Runtime source mode is marked as `semantic_scholar`, `mock`, or `mock_fallback`.
+- `extract_evidence_cards({})`: extracts paper IDs, titles, years, methods, claims, limitations, and uncertain fields.
+- `compare_and_find_gaps({})`: creates source-linked matrix rows and candidate gaps.
+- `write_outputs({})`: writes the report, matrix, and evidence card artifacts.
+
+Run the MVP audit loop:
+
+```bash
+python scripts/audit_research_gap_mvp.py
+```
+
+The audit runs `python -m pytest`, a scripted offline demo with a non-default topic, the live MiMo demo, artifact schema/topic/source assertions, and log checks for real tool calls and mixed-response handling.
+
 ## Running with Xiaomi MiMo
 
 This repo includes `MimoProvider` for MiMo's OpenAI-compatible API. The default is the token-plan Singapore base URL and the strongest text/agent model:

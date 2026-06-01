@@ -1,0 +1,802 @@
+# Báo cáo đề xuất: Research Gap Analyzer Agent
+
+## 1. Giới thiệu
+
+Trong quá trình làm nghiên cứu học thuật, một trong những bước khó nhất là tìm ra khoảng trống nghiên cứu từ một lượng lớn tài liệu khoa học. Người học hoặc nhà nghiên cứu thường phải tự tìm paper, đọc abstract, so sánh phương pháp, kiểm tra mâu thuẫn giữa các nguồn, ghi chú từng tài liệu và cuối cùng tổng hợp thành research gap. Đây là một quy trình tốn thời gian, dễ bị thiếu sót và phụ thuộc nhiều vào kinh nghiệm cá nhân.
+
+Dự án **Research Gap Analyzer Agent** được đề xuất nhằm giải quyết vấn đề này bằng cách xây dựng một AI Agent có khả năng hỗ trợ người dùng từ giai đoạn đưa ra ý tưởng nghiên cứu ban đầu đến khi tạo được một báo cáo phân tích research gap có cấu trúc. Agent không chỉ tóm tắt paper đơn lẻ, mà hoạt động như một trợ lý nghiên cứu có quy trình: làm rõ yêu cầu, truy xuất tài liệu học thuật, trích xuất luận điểm chính, so sánh các nguồn, phát hiện điểm chung, mâu thuẫn, khoảng trống và tạo thư mục chú giải.
+
+Điểm cốt lõi của hệ thống là sử dụng mô hình **ReAct Agent**, trong đó agent liên tục thực hiện chu trình: suy nghĩ, hành động, quan sát kết quả, cập nhật bộ nhớ và phản tư trước khi đưa ra bước tiếp theo. Cách tiếp cận này phù hợp với bài toán nghiên cứu vì việc tìm research gap không thể giải quyết bằng một lần gọi mô hình ngôn ngữ, mà cần nhiều vòng truy xuất, đánh giá và tổng hợp thông tin.
+
+---
+
+## 2. Bài toán cần giải quyết
+
+### 2.1. Bối cảnh
+
+Sinh viên, researcher hoặc người làm R&D thường bắt đầu với một ý tưởng nghiên cứu khá rộng, ví dụ: “Self-supervised learning for medical image segmentation with limited data” hoặc “Efficient transformer architecture for edge devices”. Tuy nhiên, từ một ý tưởng ban đầu đến một research gap rõ ràng là một quá trình phức tạp.
+
+Người nghiên cứu cần trả lời nhiều câu hỏi:
+
+* Lĩnh vực chính và nhánh con của đề tài là gì?
+* Những keyword nào nên dùng để tìm paper?
+* Paper nào là survey, paper nào là phương pháp mới?
+* Các nguồn có đang đồng thuận với nhau không?
+* Có mâu thuẫn nào trong kết quả hoặc phương pháp không?
+* Có hướng nào được nhắc đến nhiều nhưng chưa được giải quyết không?
+* Gap nào đủ cụ thể, có bằng chứng và có khả năng triển khai?
+
+Nếu làm thủ công, người dùng phải tự chuyển qua nhiều công cụ khác nhau như Google Scholar, Semantic Scholar, arXiv, Crossref, Zotero, Notion hoặc file markdown cá nhân. Điều này làm quy trình nghiên cứu bị phân mảnh và khó kiểm soát chất lượng.
+
+### 2.2. Pain points hiện tại
+
+**Thứ nhất, người dùng khó làm rõ phạm vi nghiên cứu.**
+Nhiều ý tưởng ban đầu thường rất rộng. Nếu không được làm rõ thành domain, subdomain, method, constraint và expected output, việc tìm kiếm tài liệu sẽ bị lan man.
+
+**Thứ hai, quá trình tìm kiếm paper bị rời rạc.**
+Người dùng thường phải thử nhiều keyword khác nhau, tìm ở nhiều nguồn khác nhau và tự loại bỏ kết quả trùng lặp. Việc này tốn thời gian và dễ bỏ sót paper quan trọng.
+
+**Thứ ba, việc đọc và trích xuất thông tin từ paper không có cấu trúc.**
+Khi đọc nhiều paper, người dùng dễ ghi chú không nhất quán. Paper này ghi methodology, paper khác ghi limitation, paper khác chỉ ghi kết quả. Điều này làm việc so sánh về sau khó chính xác.
+
+**Thứ tư, việc phát hiện research gap dễ mang tính cảm tính.**
+Một gap tốt cần dựa trên bằng chứng từ nhiều nguồn. Nếu chỉ đọc vài paper rồi kết luận “chưa ai làm”, kết luận đó có thể sai. Người dùng cần một cơ chế so sánh và xác minh gap tốt hơn.
+
+**Thứ năm, output cuối cùng thường mất nhiều thời gian định dạng.**
+Sau khi đọc paper, người dùng vẫn phải tạo bibliography, citation, comparison table, literature map và báo cáo tổng hợp. Đây là các công việc có tính lặp lại cao nhưng vẫn tiêu tốn nhiều thời gian.
+
+---
+
+## 3. Mục tiêu của hệ thống
+
+Mục tiêu của **Research Gap Analyzer Agent** là xây dựng một agent hỗ trợ toàn bộ workflow phân tích khoảng trống nghiên cứu.
+
+Hệ thống cần có khả năng:
+
+1. Hiểu yêu cầu nghiên cứu ban đầu của người dùng.
+2. Làm rõ lĩnh vực, phạm vi, keyword, citation style và độ sâu mong muốn.
+3. Truy xuất tài liệu từ các cơ sở dữ liệu học thuật như Semantic Scholar, arXiv và Crossref.
+4. Lọc và chọn các paper có liên quan nhất.
+5. Trích xuất thông tin quan trọng từ paper như research question, methodology, key claims, limitations và future work.
+6. So sánh các paper theo nhiều chiều để tìm điểm chung, mâu thuẫn và khoảng trống.
+7. Tổng hợp research gaps có bằng chứng.
+8. Tạo output có cấu trúc gồm gap analysis report, annotated bibliography, comparison matrix và literature map.
+
+Hệ thống không nhằm thay thế hoàn toàn nhà nghiên cứu, mà đóng vai trò như một research assistant giúp tăng tốc quá trình tìm hiểu tài liệu, giảm công việc thủ công và đưa ra các candidate gaps để người dùng tiếp tục kiểm chứng.
+
+---
+
+## 4. Input và Output của hệ thống
+
+### 4.1. Input
+
+Input của hệ thống gồm hai nhóm chính: ý tưởng nghiên cứu và các ràng buộc đầu ra.
+
+Ví dụ input:
+
+```text
+Research topic:
+Self-supervised learning for medical image segmentation with limited labeled data
+
+Requirements:
+- Citation style: IEEE
+- Depth: Comprehensive
+- Time range: 2019–2024
+- Focus areas:
+  + Contrastive learning
+  + Anatomical priors
+  + Cross-modality transfer
+- Constraints:
+  + Only CT and MRI
+  + Less than 100 labeled samples
+  + Should be feasible on a single GPU
+- Expected outputs:
+  + Gap analysis report
+  + Annotated bibliography
+  + Comparison table
+```
+
+Sau khi nhận input, agent sẽ chuyển thông tin này thành cấu trúc nội bộ:
+
+```json
+{
+  "domain": "Medical Image Analysis",
+  "subdomain": "Medical Image Segmentation",
+  "method": "Self-Supervised Learning",
+  "problem": "Limited Labeled Data",
+  "citation_style": "IEEE",
+  "year_range": [2019, 2024],
+  "focus_areas": [
+    "contrastive learning",
+    "anatomical priors",
+    "cross-modality transfer"
+  ],
+  "constraints": {
+    "modalities": ["CT", "MRI"],
+    "max_labeled_samples": 100,
+    "compute": "single GPU"
+  }
+}
+```
+
+### 4.2. Output
+
+Output cuối cùng gồm nhiều artifact:
+
+**1. Gap Analysis Report**
+Báo cáo chính, trình bày các research gap được phát hiện. Mỗi gap cần có statement, evidence, significance, confidence và suggested direction.
+
+**2. Annotated Bibliography**
+Thư mục chú giải, trong đó mỗi paper có citation, summary, key claims, methodology, limitations và relevance với đề tài.
+
+**3. Comparison Matrix**
+Bảng so sánh các paper theo những chiều quan trọng như method, dataset, modality, evaluation setting, limitation và gap connection.
+
+**4. Literature Map**
+Bản đồ khái niệm thể hiện các cụm hướng nghiên cứu, quan hệ giữa các phương pháp và vị trí của các gap được phát hiện.
+
+---
+
+## 5. Đề xuất giải pháp tổng thể
+
+Giải pháp được đề xuất là xây dựng một **ReAct-based Research Agent**. Agent này không chỉ tạo câu trả lời từ một prompt, mà hoạt động theo nhiều vòng lặp có kiểm soát. Ở mỗi vòng lặp, agent sẽ xác định trạng thái hiện tại, chọn tool phù hợp, quan sát kết quả, cập nhật memory và quyết định bước tiếp theo.
+
+Kiến trúc tổng thể gồm 5 thành phần chính:
+
+1. **Input Interpreter**
+2. **ReAct Core Loop**
+3. **Phase Orchestrator**
+4. **Tool Registry**
+5. **Output Generator**
+
+Luồng hoạt động tổng quát:
+
+```text
+User Input
+   ↓
+Input Interpreter
+   ↓
+ReAct Core Loop
+   ↓
+Phase Orchestrator
+   ↓
+Academic Search Tools / Extraction Tools / Analysis Tools
+   ↓
+Memory System
+   ↓
+Gap Synthesis
+   ↓
+Output Generator
+   ↓
+Final Research Artifacts
+```
+
+---
+
+## 6. Full Architecture
+
+### 6.1. Input Interpreter
+
+Input Interpreter có nhiệm vụ chuyển yêu cầu tự nhiên của người dùng thành một cấu trúc rõ ràng để agent có thể xử lý.
+
+Thành phần này sẽ phân tích:
+
+* Chủ đề nghiên cứu chính.
+* Lĩnh vực và nhánh con.
+* Keyword ban đầu.
+* Citation style.
+* Độ sâu mong muốn.
+* Khoảng thời gian paper.
+* Ràng buộc về dataset, method, domain hoặc compute.
+* Output người dùng mong muốn.
+
+Ví dụ, nếu người dùng nhập “I want to find gaps in efficient transformers for edge devices”, Input Interpreter sẽ phân tích thành:
+
+```json
+{
+  "domain": "Deep Learning",
+  "subdomain": "Efficient Transformer Architecture",
+  "target_environment": "Edge Devices",
+  "possible_keywords": [
+    "efficient transformer",
+    "edge AI",
+    "model compression",
+    "linear attention",
+    "sparse attention",
+    "quantization",
+    "knowledge distillation"
+  ]
+}
+```
+
+Vai trò của module này rất quan trọng vì nếu hiểu sai phạm vi ngay từ đầu, toàn bộ quá trình tìm kiếm và tổng hợp gap phía sau sẽ sai lệch.
+
+---
+
+### 6.2. ReAct Core Loop
+
+ReAct Core Loop là trung tâm của hệ thống. Thay vì thực hiện pipeline cứng, agent sẽ liên tục ra quyết định dựa trên trạng thái hiện tại.
+
+Mỗi vòng lặp gồm 5 bước:
+
+```text
+Thought → Action → Observation → Memory Update → Reflection
+```
+
+**Thought:** Agent tự đánh giá mình đang ở phase nào, đã biết gì và còn thiếu gì.
+**Action:** Agent chọn tool phù hợp, ví dụ search paper, extract claims hoặc compare papers.
+**Observation:** Agent nhận kết quả từ tool.
+**Memory Update:** Agent lưu kết quả vào memory để sử dụng ở các vòng sau.
+**Reflection:** Agent đánh giá chất lượng kết quả và quyết định tiếp tục, đổi chiến lược hoặc chuyển phase.
+
+Ví dụ:
+
+```text
+Thought:
+Tôi đã có survey papers nhưng chưa có paper nào tập trung vào anatomical priors.
+Cần tìm thêm paper về anatomy-aware SSL.
+
+Action:
+search_arxiv("anatomy-aware self-supervised medical segmentation")
+
+Observation:
+Tìm được 3 paper liên quan, nhưng chỉ một paper kết hợp anatomical prior với restoration-based SSL.
+
+Reflection:
+Có dấu hiệu gap: anatomical priors chưa được kết hợp với contrastive learning.
+```
+
+Cơ chế này giúp agent linh hoạt hơn một pipeline tuyến tính. Nếu search không đủ tốt, agent có thể đổi keyword. Nếu paper bị trùng lặp, agent có thể mở rộng hướng tìm kiếm. Nếu gap chưa chắc chắn, agent có thể chạy verification search.
+
+---
+
+### 6.3. Phase Orchestrator
+
+Phase Orchestrator kiểm soát agent qua các giai đoạn khác nhau. Mỗi phase có mục tiêu, tool và điều kiện chuyển phase riêng.
+
+#### Phase 1: Clarify
+
+Mục tiêu của phase này là làm rõ bài toán nghiên cứu.
+
+Agent cần xác định:
+
+* Domain.
+* Subdomain.
+* Main concepts.
+* Related keywords.
+* Inclusion criteria.
+* Exclusion criteria.
+* Search strategy.
+
+Output của phase này là một search plan có cấu trúc.
+
+Ví dụ:
+
+```json
+{
+  "domain": "Medical Image Analysis",
+  "subdomain": "Medical Image Segmentation",
+  "primary_keywords": [
+    "self-supervised learning medical image segmentation",
+    "contrastive learning medical imaging",
+    "few-shot medical segmentation"
+  ],
+  "secondary_keywords": [
+    "anatomical prior",
+    "cross-modality transfer",
+    "limited annotation"
+  ],
+  "search_strategy": [
+    "Find survey papers first",
+    "Search method-specific papers",
+    "Search constraint-specific papers",
+    "Validate candidate gaps"
+  ]
+}
+```
+
+#### Phase 2: Search
+
+Mục tiêu của phase này là truy xuất paper từ nhiều nguồn học thuật.
+
+Các nguồn chính:
+
+* Semantic Scholar: tìm paper, citation count, references.
+* arXiv: tìm preprint mới.
+* Crossref: kiểm tra metadata, DOI, venue.
+
+Agent sẽ không chỉ tìm một lần, mà thực hiện nhiều vòng search:
+
+1. Search broad để lấy survey papers.
+2. Search theo từng focus area.
+3. Search theo constraint cụ thể.
+4. Snowball search từ references/citations.
+5. Deduplicate papers.
+6. Rank papers theo relevance, year và citation.
+
+Output của phase này là một paper pool đã được lọc.
+
+```json
+{
+  "total_found": 150,
+  "after_dedup": 89,
+  "high_relevance": 25,
+  "selected_for_extraction": 15
+}
+```
+
+#### Phase 3: Extract
+
+Mục tiêu của phase này là trích xuất thông tin quan trọng từ từng paper.
+
+Với mỗi paper, agent cần lấy:
+
+* Research question.
+* Methodology.
+* Dataset.
+* Main claims.
+* Evidence.
+* Limitations.
+* Future work.
+* Relevance to user topic.
+
+Ví dụ output:
+
+```json
+{
+  "paper_id": "P001",
+  "title": "Contrastive Learning for Medical Image Segmentation",
+  "method": "SimCLR-style contrastive pretraining with U-Net",
+  "claims": [
+    "Contrastive pretraining improves segmentation with limited labels",
+    "Performance saturates at around 100 labeled samples"
+  ],
+  "limitations": [
+    "Does not use anatomical structure",
+    "Requires multi-GPU pretraining",
+    "Only tested on organ segmentation"
+  ],
+  "future_work": [
+    "Incorporate spatial awareness into contrastive loss"
+  ]
+}
+```
+
+Phase này biến paper từ dạng văn bản tự do thành tri thức có cấu trúc.
+
+#### Phase 4: Compare
+
+Mục tiêu của phase này là so sánh các paper với nhau.
+
+Agent cần phát hiện:
+
+* Điểm chung giữa các paper.
+* Mâu thuẫn giữa các paper.
+* Phương pháp nào đang được dùng nhiều.
+* Phương pháp nào chưa được kết hợp.
+* Dataset hoặc setting nào bị bỏ quên.
+* Assumption nào được nhiều paper dùng nhưng chưa được kiểm chứng.
+
+Ví dụ:
+
+```text
+Agreement:
+Most papers agree that SSL improves performance under limited labeled data.
+
+Contradiction:
+Some papers claim global contrastive learning is enough, while others show local contrastive learning performs better.
+
+Missing combination:
+No paper combines anatomical priors with contrastive learning under single-GPU constraints.
+```
+
+Đây là phase quan trọng nhất vì research gap không chỉ đến từ tóm tắt paper, mà đến từ việc nhìn mối quan hệ giữa nhiều paper.
+
+#### Phase 5: Synthesize
+
+Mục tiêu của phase này là tổng hợp gap cuối cùng.
+
+Mỗi gap cần có cấu trúc:
+
+```json
+{
+  "gap_id": "GAP-001",
+  "statement": "No existing work combines anatomical priors with contrastive learning for medical image segmentation under limited labeled data.",
+  "type": "methodological",
+  "evidence": [
+    "Contrastive methods improve performance but ignore anatomy.",
+    "Anatomy-aware methods improve segmentation but are mostly restoration-based.",
+    "No reviewed paper combines both approaches."
+  ],
+  "significance": "High",
+  "confidence": 0.89,
+  "suggested_direction": "Design anatomy-aware positive and negative pairs for contrastive learning."
+}
+```
+
+Agent cũng cần xếp hạng gap theo:
+
+* Novelty.
+* Evidence strength.
+* Impact.
+* Feasibility.
+* Fit với constraint của người dùng.
+
+---
+
+## 7. Tool Registry
+
+Agent cần một tập hợp tool để thực hiện các hành động cụ thể.
+
+### 7.1. Search Tools
+
+```text
+search_semantic_scholar(query, limit, year_range)
+search_arxiv(query, max_results, category)
+search_crossref(query, filters)
+snowball_search(seed_paper, direction)
+```
+
+Các tool này giúp agent truy xuất tài liệu từ nhiều nguồn khác nhau và mở rộng paper pool.
+
+### 7.2. Extraction Tools
+
+```text
+extract_claims(paper_text)
+extract_methodology(paper_text)
+extract_limitations(paper_text)
+extract_future_work(paper_text)
+```
+
+Các tool này thường được hỗ trợ bởi LLM để chuyển abstract hoặc full text thành thông tin có cấu trúc.
+
+### 7.3. Analysis Tools
+
+```text
+compare_papers(paper_list)
+find_contradictions(claim_set)
+build_methodology_map(papers)
+rank_gap_candidates(gaps)
+```
+
+Các tool này giúp agent so sánh nhiều paper và phát hiện pattern.
+
+### 7.4. Output Tools
+
+```text
+format_citation(paper, style)
+generate_annotation(paper)
+create_comparison_matrix(papers)
+generate_gap_report(gaps)
+save_output(files)
+```
+
+Các tool này tạo output cuối cùng ở dạng markdown, JSON hoặc thư mục tài liệu.
+
+---
+
+## 8. Memory System
+
+Memory là thành phần quan trọng giúp agent không bị quên các bước trước đó.
+
+Hệ thống memory gồm ba lớp:
+
+### 8.1. Working Memory
+
+Lưu trạng thái hiện tại trong một session:
+
+* Current phase.
+* Search queries đã dùng.
+* Papers đã thu thập.
+* Papers đang chờ extract.
+* Claims đã trích xuất.
+
+### 8.2. Episodic Memory
+
+Lưu lịch sử hành động của agent:
+
+* Agent đã search gì.
+* Kết quả trả về có hữu ích không.
+* Có bị trùng kết quả không.
+* Khi nào agent quyết định đổi chiến lược.
+
+### 8.3. Semantic Memory
+
+Lưu tri thức đã tổng hợp:
+
+* Concept clusters.
+* Claim graph.
+* Gap hypotheses.
+* Paper-to-gap mapping.
+* Methodology taxonomy.
+
+Ví dụ:
+
+```json
+{
+  "claim_graph": {
+    "contrastive learning improves limited-data segmentation": [
+      "P001",
+      "P004",
+      "P009"
+    ],
+    "anatomical priors improve structure awareness": [
+      "P003",
+      "P008"
+    ]
+  },
+  "gap_hypotheses": [
+    "Anatomy-aware contrastive learning is underexplored",
+    "Single-GPU medical SSL is underexplored"
+  ]
+}
+```
+
+---
+
+## 9. Reflection và kiểm soát chất lượng
+
+Một điểm quan trọng của full architecture là agent không nên tin ngay vào kết quả đầu tiên. Hệ thống cần có reflection loop để kiểm tra chất lượng ở nhiều bước.
+
+### 9.1. Search Quality Reflection
+
+Agent tự hỏi:
+
+```text
+Các search gần đây có trả về kết quả quá trùng nhau không?
+Có focus area nào chưa được cover không?
+Có cần đổi keyword không?
+```
+
+Nếu kết quả bị trùng quá nhiều, agent sẽ đổi chiến lược tìm kiếm.
+
+### 9.2. Coverage Reflection
+
+Agent kiểm tra xem các nhánh chính của đề tài đã được cover chưa.
+
+Ví dụ:
+
+```text
+Contrastive learning: đủ paper.
+Anatomical priors: thiếu paper.
+Cross-modality transfer: thiếu paper.
+Single-GPU constraint: gần như chưa có paper.
+```
+
+### 9.3. Gap Validation Reflection
+
+Trước khi khẳng định một gap, agent cần kiểm tra lại.
+
+Ví dụ:
+
+```text
+Candidate gap:
+No paper combines anatomical priors with contrastive learning.
+
+Verification search:
+"anatomy-aware contrastive learning medical segmentation"
+"spatial contrastive learning medical image segmentation"
+"anatomical prior contrastive SSL"
+
+Nếu vẫn không tìm được paper trực tiếp, confidence của gap tăng lên.
+```
+
+### 9.4. Citation Completeness Reflection
+
+Agent kiểm tra xem mỗi paper có đủ thông tin để citation không:
+
+* Authors.
+* Year.
+* Title.
+* Venue.
+* DOI.
+* URL.
+
+Nếu thiếu metadata, agent gọi Crossref để bổ sung.
+
+---
+
+## 10. Output cuối cùng
+
+Full architecture tạo ra một thư mục output như sau:
+
+```text
+project_output/
+│
+├── gap_analysis_report.md
+│
+├── gap_analysis.json
+│
+├── comparison_matrix.md
+│
+├── literature_map.md
+│
+└── annotated_bibliography/
+    ├── README.md
+    ├── 01_paper_name.md
+    ├── 02_paper_name.md
+    └── 03_paper_name.md
+```
+
+### 10.1. Gap Analysis Report
+
+Báo cáo chính gồm:
+
+* Research topic.
+* Search scope.
+* Number of papers reviewed.
+* Summary of literature.
+* Main trends.
+* Research gaps.
+* Evidence for each gap.
+* Suggested research directions.
+
+### 10.2. Annotated Bibliography
+
+Mỗi paper có một file riêng:
+
+```markdown
+# Paper Title
+
+## Citation
+
+[1] Author, “Title,” Venue, Year.
+
+## Summary
+
+Tóm tắt paper trong 3–5 câu.
+
+## Key Claims
+
+- Claim 1
+- Claim 2
+
+## Methodology
+
+Mô tả phương pháp chính.
+
+## Limitations
+
+- Limitation 1
+- Limitation 2
+
+## Relevance to Research Topic
+
+Paper này liên quan đến gap nào và vì sao.
+```
+
+### 10.3. Comparison Matrix
+
+Bảng so sánh paper:
+
+```markdown
+| Paper | Method | Dataset | Modality | Key Claim | Limitation | Gap Connection |
+|---|---|---|---|---|---|---|
+| P001 | Contrastive SSL | LiTS | CT | Improves few-shot segmentation | Ignores anatomy | GAP-001 |
+| P002 | Anatomy-aware SSL | AbdomenCT | CT | Improves structure awareness | Not contrastive | GAP-001 |
+| P003 | Cross-modal SSL | Brain CT/MRI | CT, MRI | Aligns modalities | Classification only | GAP-003 |
+```
+
+### 10.4. Literature Map
+
+Literature map thể hiện:
+
+* Các nhóm phương pháp chính.
+* Paper đại diện cho từng nhóm.
+* Các hướng đã được nghiên cứu nhiều.
+* Các vùng còn trống.
+* Gap nằm ở đâu trong bản đồ literature.
+
+---
+
+## 11. Luồng hoạt động minh họa
+
+Giả sử người dùng nhập:
+
+```text
+Find research gaps in self-supervised learning for medical image segmentation with limited labeled data. Focus on CT/MRI, less than 100 labeled samples, IEEE citation style.
+```
+
+Agent sẽ chạy như sau:
+
+```text
+Step 1:
+Parse topic → xác định domain là Medical Image Analysis.
+
+Step 2:
+Generate keywords → self-supervised learning, medical image segmentation, contrastive learning, anatomical priors, few-shot segmentation.
+
+Step 3:
+Search Semantic Scholar → lấy survey papers và paper có citation cao.
+
+Step 4:
+Search arXiv → lấy paper mới trong 1–2 năm gần đây.
+
+Step 5:
+Search Crossref → bổ sung metadata và DOI.
+
+Step 6:
+Deduplicate và rank papers.
+
+Step 7:
+Extract claims, methods, limitations từ từng paper.
+
+Step 8:
+Compare papers theo method, dataset, modality, data regime và compute constraint.
+
+Step 9:
+Detect contradictions và missing combinations.
+
+Step 10:
+Validate candidate gaps bằng targeted search.
+
+Step 11:
+Generate final gap report, annotated bibliography và comparison matrix.
+```
+
+Kết quả có thể là:
+
+```text
+GAP-001:
+Anatomy-aware contrastive learning for medical image segmentation is underexplored.
+
+GAP-002:
+Few existing SSL methods are designed for single-GPU medical research environments.
+
+GAP-003:
+Cross-modality SSL for segmentation is less explored than classification.
+
+GAP-004:
+There is no standardized benchmark for few-shot medical SSL segmentation.
+```
+
+---
+
+## 12. Giá trị của giải pháp
+
+Giải pháp này có giá trị ở ba cấp độ.
+
+### 12.1. Với sinh viên và researcher
+
+Agent giúp giảm thời gian đọc paper ban đầu, hỗ trợ xác định gap có cấu trúc và tạo bibliography nhanh hơn.
+
+### 12.2. Với giảng viên hoặc mentor
+
+Agent có thể giúp đánh giá một đề tài nghiên cứu có đủ cơ sở literature hay không, gap có thật sự rõ không và hướng nghiên cứu có đáng triển khai không.
+
+### 12.3. Với doanh nghiệp R&D
+
+Agent có thể dùng để scan nhanh một lĩnh vực công nghệ, tìm xu hướng, tìm khoảng trống sản phẩm hoặc xác định hướng nghiên cứu có tiềm năng.
+
+---
+
+## 13. Rủi ro và giới hạn
+
+Dù kiến trúc có tiềm năng, hệ thống vẫn có một số rủi ro.
+
+**Thứ nhất, gap có thể bị hallucination.**
+Agent có thể kết luận “chưa ai làm” nếu search chưa đủ tốt. Vì vậy cần có bước gap validation.
+
+**Thứ hai, API học thuật không phải lúc nào cũng có full text.**
+Nhiều paper chỉ có metadata và abstract. Điều này làm extraction bị giới hạn nếu không tích hợp PDF parser.
+
+**Thứ ba, citation có thể thiếu hoặc sai metadata.**
+Cần dùng Crossref hoặc DOI lookup để kiểm tra lại citation.
+
+**Thứ tư, so sánh claims giữa paper là nhiệm vụ khó.**
+Các paper có thể dùng dataset, metric và setting khác nhau. Agent cần tránh so sánh trực tiếp nếu điều kiện thí nghiệm không tương đương.
+
+**Thứ năm, output vẫn cần con người kiểm duyệt.**
+Agent nên được xem là trợ lý tạo candidate gaps, không phải hệ thống kết luận học thuật tuyệt đối.
+
+---
+
+## 14. Kết luận
+
+Research Gap Analyzer Agent là một bài toán phù hợp để áp dụng kiến trúc ReAct Agent vì nó yêu cầu nhiều bước suy luận, nhiều lần gọi tool và khả năng phản tư liên tục. Hệ thống giải quyết một pain point thực tế trong nghiên cứu học thuật: từ một ý tưởng ban đầu, người dùng cần tìm tài liệu, hiểu literature, so sánh luận điểm và phát hiện khoảng trống nghiên cứu.
+
+Full architecture của hệ thống gồm Input Interpreter, ReAct Core Loop, Phase Orchestrator, Tool Registry, Memory System, Reflection Mechanism và Output Generator. Cách thiết kế này giúp agent không chỉ tóm tắt paper, mà có thể vận hành như một research assistant có quy trình.
+
+Nếu triển khai đầy đủ, hệ thống có thể tạo ra các artifact có giá trị như gap analysis report, annotated bibliography, comparison matrix và literature map. Tuy nhiên, để đảm bảo tính thực tế, hệ thống nên được phát triển theo từng giai đoạn: bắt đầu với MVP một nguồn dữ liệu và một output chính, sau đó mở rộng dần sang multi-source search, full-text extraction, citation validation và reflection loop nâng cao.
+
+Tóm lại, đây là một hướng đề tài có tính ứng dụng cao, thể hiện rõ giá trị của AI Agent và đủ chiều sâu để trình bày trong bối cảnh học thuật hoặc xây dựng thành một sản phẩm hỗ trợ nghiên cứu thực tế.

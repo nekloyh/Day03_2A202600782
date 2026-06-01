@@ -1,6 +1,7 @@
 import os
 import sys
 from dotenv import load_dotenv
+import pytest
 
 # Add src to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -15,9 +16,7 @@ def test_local_phi3():
     print(f"Model Path: {model_path}")
     
     if not os.path.exists(model_path):
-        print(f"❌ Error: Model file not found at {model_path}")
-        print("Please download it from Hugging Face and place it in the models/ folder.")
-        return
+        pytest.skip(f"Local model file not found at {model_path}.")
 
     try:
         provider = LocalProvider(model_path=model_path)
